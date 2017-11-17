@@ -21,23 +21,25 @@ package genie
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"sort"
+	"strconv"
+	"strings"
+
 	"github.com/Huawei-PaaS/CNI-Genie/plugins"
 	"github.com/Huawei-PaaS/CNI-Genie/utils"
 	"github.com/containernetworking/cni/libcni"
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/golang/glog"
-	"io/ioutil"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
-	"os/exec"
-	"sort"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -83,6 +85,7 @@ func ParseCNIConf(confData []byte) (utils.NetConf, error) {
 func AddPodNetwork(cniArgs utils.CNIArgs, conf utils.NetConf) (types.Result, error) {
 	// Collect the result in this variable - this is ultimately what gets "returned" by this function by printing
 	// it to stdout.
+	var endResult types.Result
 	var result types.Result
 
 	k8sArgs, err := loadArgs(cniArgs)
@@ -131,6 +134,10 @@ func AddPodNetwork(cniArgs utils.CNIArgs, conf utils.NetConf) (types.Result, err
 		if err != nil {
 			newErr = err
 		}
+		endResult, err = mergeWithResult(result, endResult)
+		if err != nil {
+			newErr = err
+		}
 		// Update pod definition with IPs "multi-ip-preferences"
 		multiIPPrefAnnot, err = UpdatePodDefinition(i, result, multiIPPrefAnnot, kubeClient, k8sArgs)
 		if err != nil {
@@ -140,7 +147,7 @@ func AddPodNetwork(cniArgs utils.CNIArgs, conf utils.NetConf) (types.Result, err
 	if newErr != nil {
 		return nil, fmt.Errorf("CNI Genie error at addNetwork: %v", newErr)
 	}
-	return result, nil
+	return endResult, nil
 }
 
 // DeletePodNetwork deletes pod networking. It has logic to parse each pod
@@ -602,4 +609,45 @@ func getK8sPodAnnotations(client *kubernetes.Clientset, k8sArgs utils.K8sArgs) (
 	}
 
 	return pod.Annotations, nil
+}
+
+func mergeWithResult(srcObj, dstObj types.Result) (types.Result, error) {
+	if dstObj == nil {
+		return srcObj, nil
+	}
+	src, err := current.NewResultFromResult(srcObj)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't convert old result to current version: %v", err)
+	}
+	dst, err := current.NewResultFromResult(dstObj)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't convert old result to current version: %v", err)
+	}
+
+	ifacesLength := len(dst.Interfaces)
+
+	for _, iface := range src.Interfaces {
+		dst.Interfaces = append(dst.Interfaces, iface)
+	}
+	for _, ip := range src.IPs {
+		if ip.Interface != -1 {
+			ip.Interface += ifacesLength
+		}
+		dst.IPs = append(dst.IPs, ip)
+	}
+	for _, route := range src.Routes {
+		dst.Routes = append(dst.Routes, route)
+	}
+
+	for _, ns := range src.DNS.Nameservers {
+		dst.DNS.Nameservers = append(dst.DNS.Nameservers, ns)
+	}
+	for _, s := range src.DNS.Search {
+		dst.DNS.Search = append(dst.DNS.Search, s)
+	}
+	for _, opt := range src.DNS.Options {
+		dst.DNS.Options = append(dst.DNS.Options, opt)
+	}
+	// TODO: what about DNS.domain?
+	return dst, nil
 }
