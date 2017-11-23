@@ -512,9 +512,14 @@ func addNetwork(conf utils.NetConf, intfId int, cniName string, cniArgs utils.CN
 			}
 			fmt.Fprintf(os.Stderr, "CNI Genie cniName file found!!!!!! confFromFile.Type =%v\n", confFromFile.Type)
 
-			stdinData, err = json.Marshal(&confFromFile)
+			// for stdinData use conf as is, without parsing. It may contain some extra keys
+			f, err := os.Open(confFile)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "CNI Genie Error while marshalling conf from %s: %v. Skipping the file.\n", confFile, err)
+				fmt.Fprintf(os.Stderr, "CNI Genie Error while reading conf from %s: %v. Skipping the file.\n", confFile, err)
+			}
+			stdinData, err = ioutil.ReadAll(f)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "CNI Genie Error while reading conf from %s: %v. Skipping the file.\n", confFile, err)
 				continue
 			}
 			cniType = confFromFile.Type
