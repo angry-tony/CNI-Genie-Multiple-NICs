@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"sort"
@@ -619,6 +620,11 @@ func getK8sPodAnnotations(client *kubernetes.Clientset, k8sArgs utils.K8sArgs) (
 }
 
 func mergeWithResult(srcObj, dstObj types.Result) (types.Result, error) {
+	srcObj, err := updateRoutes(srcObj)
+	if err != nil {
+		return nil, fmt.Errorf("Routes update failed: %v", err)
+	}
+
 	if dstObj == nil {
 		return srcObj, nil
 	}
@@ -657,4 +663,28 @@ func mergeWithResult(srcObj, dstObj types.Result) (types.Result, error) {
 	}
 	// TODO: what about DNS.domain?
 	return dst, nil
+}
+
+func updateRoutes(rObj types.Result) (types.Result, error) {
+	result, err := current.NewResultFromResult(rObj)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't convert old result to current version: %v", err)
+	}
+	var gw net.IP
+	for _, ip := range result.IPs {
+		if ip.Interface != -1 {
+			gw = ip.Gateway
+			break
+		}
+	}
+	if gw == nil {
+		return nil, fmt.Errorf("Couldn't find gw in result %v", result)
+	}
+
+	for _, route := range result.Routes {
+		if route.GW == nil {
+			route.GW = gw
+		}
+	}
+	return result, nil
 }
