@@ -674,6 +674,10 @@ func updateRoutes(rObj types.Result) (types.Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't convert old result to current version: %v", err)
 	}
+	if len(result.Routes) == 0 {
+		return result, nil
+	}
+
 	var gw net.IP
 	for _, ip := range result.IPs {
 		if ip.Interface != -1 {
