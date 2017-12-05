@@ -177,6 +177,11 @@ func DeletePodNetwork(cniArgs utils.CNIArgs, conf utils.NetConf) error {
 	//    cni: "canal,weave"
 	annots, err := ParsePodAnnotationsForCNI(kubeClient, k8sArgs)
 	if err != nil {
+		// XXX: handle it in a better way
+		if strings.Contains(err.Error(), "not found") {
+			// Pod is gone, we can't do anything
+			return nil
+		}
 		return fmt.Errorf("CNI Genie error at ParsePodAnnotations: %v", err)
 	}
 
