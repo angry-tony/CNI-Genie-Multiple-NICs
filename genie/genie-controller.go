@@ -112,6 +112,9 @@ func AddPodNetwork(cniArgs utils.CNIArgs, conf utils.NetConf) (types.Result, err
 	if err != nil {
 		return nil, fmt.Errorf("CNI Genie error at ParsePodAnnotations: %v", err)
 	}
+	if len(annots) == 0 {
+		annots = []string{defaultPlugin(conf)}
+	}
 
 	// parse pod annotations for "multi-ip-preferences"
 	// eg:
@@ -183,6 +186,9 @@ func DeletePodNetwork(cniArgs utils.CNIArgs, conf utils.NetConf) error {
 			return nil
 		}
 		return fmt.Errorf("CNI Genie error at ParsePodAnnotations: %v", err)
+	}
+	if len(annots) == 0 {
+		annots = []string{defaultPlugin(conf)}
 	}
 
 	var newErr error
@@ -363,8 +369,8 @@ func parseCNIAnnotations(annot map[string]string, client *kubernetes.Clientset, 
 	var finalAnnots []string
 
 	if len(annot) == 0 {
-		fmt.Fprintf(os.Stderr, "CNI Genie no annotations is given! Default plugin is weave! annot is %V\n", annot)
-		finalAnnots = []string{"weave"}
+		fmt.Fprintf(os.Stderr, "CNI Genie no annotations is given! annot is %v\n", annot)
+		finalAnnots = []string{}
 	} else if strings.TrimSpace(annot["cni"]) == "" {
 		networksAnnot := ParsePodAnnotationsForNetworks(client, k8sArgs)
 		if networksAnnot == "" {
@@ -700,4 +706,11 @@ func updateRoutes(rObj types.Result) (types.Result, error) {
 		}
 	}
 	return result, nil
+}
+
+func defaultPlugin(conf utils.NetConf) string {
+	if conf.DefaultPlugin == "" {
+		return "weave"
+	}
+	return conf.DefaultPlugin
 }
