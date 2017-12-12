@@ -691,17 +691,17 @@ func updateRoutes(rObj types.Result) (types.Result, error) {
 
 	var gw net.IP
 	for _, ip := range result.IPs {
-		if ip.Interface != -1 {
+		if ip.Gateway != nil {
 			gw = ip.Gateway
 			break
 		}
 	}
-	if gw == nil {
-		return nil, fmt.Errorf("Couldn't find gw in result %v", result)
-	}
 
 	for _, route := range result.Routes {
 		if route.GW == nil {
+			if gw == nil {
+				return nil, fmt.Errorf("Couldn't find gw in result %v", result)
+			}
 			route.GW = gw
 		}
 	}
