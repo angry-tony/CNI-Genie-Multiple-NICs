@@ -639,6 +639,10 @@ func mergeWithResult(srcObj, dstObj types.Result) (types.Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Routes update failed: %v", err)
 	}
+	srcObj, err = fixInterfaces(srcObj)
+	if err != nil {
+		return nil, fmt.Errorf("Failea to fix interfaces: %v", err)
+	}
 
 	if dstObj == nil {
 		return srcObj, nil
@@ -713,4 +717,17 @@ func defaultPlugin(conf utils.NetConf) string {
 		return "weave"
 	}
 	return conf.DefaultPlugin
+}
+
+func fixInterfaces(rObj types.Result) (types.Result, error) {
+	result, err := current.NewResultFromResult(rObj)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't convert old result to current version: %v", err)
+	}
+	if len(result.Interfaces) == 0 {
+		for _, ip := range result.IPs {
+			ip.Interface = -1
+		}
+	}
+	return result, nil
 }
